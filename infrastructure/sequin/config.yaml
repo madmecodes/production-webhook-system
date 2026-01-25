@@ -1,0 +1,22 @@
+# Sequin CDC Configuration for Dodo Webhook Demo
+
+# Source database configuration
+source:
+  type: postgres
+  connection_string: "postgres://dodo:dodo_pass@postgres:5432/dodo_demo"
+  publication: "domain_events_pub"
+  slot: "domain_events_slot"
+
+# Sink configuration - where events are sent
+sinks:
+  - type: kafka
+    id: webhook-events-kafka
+    brokers:
+      - "kafka:9092"
+    topic: "webhook-events"
+    key_column: "merchant_id"
+    message_format: "json"
+    delivery_guarantee: "exactly_once"
+    tables:
+      - schema: "public"
+        table: "domain_events"
