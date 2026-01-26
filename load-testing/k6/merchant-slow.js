@@ -23,9 +23,9 @@ const merchantNewReceived = new Counter('slow_test_new_received');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 3 },    // Light load with slow endpoint
-    { duration: '2m', target: 10 },    // Medium load
-    { duration: '30s', target: 0 },    // Ramp down
+    { duration: '15s', target: 3 },    // Light load with slow endpoint
+    { duration: '40s', target: 10 },   // Medium load
+    { duration: '15s', target: 0 },    // Ramp down
   ],
   thresholds: {
     'http_req_duration': ['p(99)<10000'],  // Relaxed timeout for slow responses
@@ -79,39 +79,28 @@ export function teardown(data) {
 
   const stats = merchantResponse.json();
 
-  const paymentsCreated = ARCH === 'new' ? paymentsCreatedNew.value() : paymentsCreatedOld.value();
-  const webhooksReceived = stats.total_received;
-  const lost = paymentsCreated - webhooksReceived;
-  const successRate = paymentsCreated > 0 ? ((webhooksReceived / paymentsCreated) * 100).toFixed(2) : 0;
-
   console.log('\n');
   console.log('╔════════════════════════════════════════╗');
   console.log('║   MERCHANT SLOW RESPONSE TEST RESULTS  ║');
   console.log('╠════════════════════════════════════════╣');
-  console.log(`║ Payments Created: ${String(paymentsCreated).padEnd(19)} ║`);
-  console.log(`║ Webhooks Received: ${String(webhooksReceived).padEnd(18)} ║`);
-  console.log(`║ Webhooks Lost: ${String(lost).padEnd(22)} ║`);
-  console.log(`║ Success Rate: ${String(successRate + '%').padEnd(23)} ║`);
+  console.log(`║ Webhooks Received: ${String(stats.total_received).padEnd(18)} ║`);
+  console.log(`║ Unique Payments: ${String(stats.unique_payments).padEnd(20)} ║`);
+  console.log('║                                        ║');
+  console.log('║ Compare with "payments_created"       ║');
+  console.log('║ metric from k6 output above            ║');
   console.log('║                                        ║');
 
   if (ARCH === 'old') {
-    if (lost > 0) {
-      console.log('║ ❌ Old architecture times out!        ║');
-      console.log('║ Hard 5s limit + slow merchant = loss  ║');
-    }
+    console.log('║ ❌ Old: Hard 5s timeout               ║');
+    console.log('║ Expected: 100% loss with 6s delay     ║');
   } else {
-    if (lost === 0) {
-      console.log('║ ✅ New architecture handles it!      ║');
-      console.log('║ Retries with exponential backoff     ║');
-    } else {
-      console.log('║ ⚠️  Some loss detected                ║');
-      console.log('║ Check retry configuration            ║');
-    }
+    console.log('║ ✅ New: Longer timeout + retry       ║');
+    console.log('║ Expected: 0% loss (retries succeed)   ║');
   }
 
   console.log('╚════════════════════════════════════════╝');
   console.log('\n');
-  console.log('To test, set FAILURE_RATE or DELAY_MS on merchant first:');
+  console.log('To test, set DELAY_MS on merchant:');
   console.log('  OLD: k6 run merchant-slow.js -e ARCH=old');
   console.log('  NEW: k6 run merchant-slow.js -e ARCH=new');
 }

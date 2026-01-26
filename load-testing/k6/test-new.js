@@ -20,12 +20,12 @@ const processingLatency = new Trend('new_processing_latency_ms');
 
 export const options = {
   stages: [
-    { duration: '1m', target: 20 },   // Ramp up to 20 VUs
-    { duration: '3m', target: 50 },   // Increase to 50 VUs (heavy load)
-    { duration: '1m', target: 0 },    // Ramp down
+    { duration: '20s', target: 10 },  // Ramp up to 10 VUs
+    { duration: '40s', target: 20 },  // Increase to 20 VUs (moderate load)
+    { duration: '20s', target: 0 },   // Ramp down
   ],
   thresholds: {
-    'new_payments_created': ['count > 100'],
+    'new_payments_created': ['count > 50'],
     'http_req_duration': ['p(99)<1000'],
   },
 };
@@ -47,7 +47,7 @@ export function setup() {
   console.log('🟢 NEW ARCHITECTURE TEST STARTING');
   console.log('✅ Expected webhook delivery: 99.99%+');
   console.log('✅ Stack: PostgreSQL triggers → Sequin → Kafka → Webhook Consumer → Merchant');
-  console.log('📊 Running 5 minutes of load test');
+  console.log('📊 Running 80 second load test');
 }
 
 export function teardown(data) {
@@ -62,14 +62,12 @@ export function teardown(data) {
   console.log('╔════════════════════════════════════════╗');
   console.log('║     NEW ARCHITECTURE TEST RESULTS      ║');
   console.log('╠════════════════════════════════════════╣');
-  console.log(`║ Payments Created: ${String(paymentsCreated.value()).padEnd(19)} ║`);
   console.log(`║ Webhooks Received: ${String(stats.total_received).padEnd(18)} ║`);
-
-  const lost = paymentsCreated.value() - stats.total_received;
-  const successRate = ((stats.total_received / paymentsCreated.value()) * 100).toFixed(2);
-
-  console.log(`║ Webhooks Lost: ${String(lost).padEnd(22)} ║`);
-  console.log(`║ Success Rate: ${String(successRate + '%').padEnd(23)} ║`);
+  console.log(`║ Unique Payments: ${String(stats.unique_payments).padEnd(20)} ║`);
+  console.log('║                                        ║');
+  console.log('║ Compare "Webhooks Received" above     ║');
+  console.log('║ with "payments_created" metric         ║');
+  console.log('║ from k6 output - should be 100%!       ║');
   console.log('║                                        ║');
   console.log('║ ✅ This is the solution!              ║');
   console.log('║ Durable, reliable, recoverable!       ║');

@@ -22,12 +22,27 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TEST_TYPE="${1:-all}"
 
+# Create results directory and timestamped report file
+RESULTS_DIR="$PROJECT_ROOT/results"
+mkdir -p "$RESULTS_DIR"
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+REPORT_FILE="$RESULTS_DIR/comparison-report-$TIMESTAMP.txt"
+
+# Redirect all output to both terminal and report file
+exec > >(tee -a "$REPORT_FILE") 2>&1
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
+
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║  Report will be saved to:                                      ║"
+echo "║  $REPORT_FILE"
+echo "╚════════════════════════════════════════════════════════════════╝"
+echo ""
 
 echo -e "${BLUE}"
 echo "╔════════════════════════════════════════════════════════════════╗"
@@ -132,22 +147,22 @@ case "$TEST_TYPE" in
         echo ""
         echo -e "${YELLOW}[1/2] OLD ARCHITECTURE BASELINE${NC}"
         cd "$PROJECT_ROOT"
-        docker compose run --rm k6 run load-testing/k6/test-old.js
+        docker compose run --rm k6 run test-old.js
         echo ""
 
         echo -e "${YELLOW}[2/2] NEW ARCHITECTURE BASELINE${NC}"
         cd "$PROJECT_ROOT"
-        docker compose run --rm k6 run load-testing/k6/test-new.js
+        docker compose run --rm k6 run test-new.js
         echo ""
 
         # 2. Merchant Failures Test
-        run_dual_test "Merchant Endpoint Failures (50%)" "load-testing/k6/merchant-failures.js" ""
+        run_dual_test "Merchant Endpoint Failures (50%)" "merchant-failures.js" ""
 
         # 3. Merchant Slow Response Test
-        run_dual_test "Merchant Slow Response (6s timeout)" "load-testing/k6/merchant-slow.js" ""
+        run_dual_test "Merchant Slow Response (6s timeout)" "merchant-slow.js" ""
 
         # 4. Channel Overflow Test
-        run_dual_test "In-Memory Channel Overflow (Burst Load)" "load-testing/k6/channel-overflow.js" ""
+        run_dual_test "In-Memory Channel Overflow (Burst Load)" "channel-overflow.js" ""
 
         # 5. Crash Tests
         run_crash_tests
@@ -160,17 +175,17 @@ case "$TEST_TYPE" in
 
     failures)
         check_services
-        run_dual_test "Merchant Endpoint Failures (50%)" "load-testing/k6/merchant-failures.js" ""
+        run_dual_test "Merchant Endpoint Failures (50%)" "merchant-failures.js" ""
         ;;
 
     slow)
         check_services
-        run_dual_test "Merchant Slow Response (6s timeout)" "load-testing/k6/merchant-slow.js" ""
+        run_dual_test "Merchant Slow Response (6s timeout)" "merchant-slow.js" ""
         ;;
 
     overflow)
         check_services
-        run_dual_test "In-Memory Channel Overflow (Burst Load)" "load-testing/k6/channel-overflow.js" ""
+        run_dual_test "In-Memory Channel Overflow (Burst Load)" "channel-overflow.js" ""
         ;;
 
     *)
@@ -209,4 +224,13 @@ echo "  1. Review the blog post for architectural details:"
 echo "     'Building Webhooks That Never Fail: Our Journey to 99.99%+ Delivery Reliability'"
 echo "  2. Examine the code differences between old and new architectures"
 echo "  3. See the Sequin, Kafka, and Restate integration in the new architecture"
+echo ""
+echo "╔════════════════════════════════════════════════════════════════╗"
+echo "║                                                                ║"
+echo "║  📄 FULL REPORT SAVED TO:                                     ║"
+echo "║  $REPORT_FILE"
+echo "║                                                                ║"
+echo "║  You can review all test results in this file.                ║"
+echo "║                                                                ║"
+echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""

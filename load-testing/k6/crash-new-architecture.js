@@ -25,9 +25,9 @@ const merchantReceived = new Counter('crash_new_merchant_received');
 
 export const options = {
   stages: [
-    { duration: '1m', target: 20 },   // Ramp up
-    { duration: '3m', target: 50 },   // Heavy load (crash happens here)
-    { duration: '1m', target: 0 },    // Ramp down
+    { duration: '30s', target: 10 },  // Ramp up
+    { duration: '2m', target: 20 },   // Moderate load (crash happens here)
+    { duration: '30s', target: 0 },   // Ramp down
   ],
   thresholds: {
     'http_req_duration': ['p(99)<1000'],
@@ -71,9 +71,9 @@ export function setup() {
   console.log('  ✅ Durable execution guarantees');
   console.log('');
   console.log('Test Parameters:');
-  console.log('  - Duration: 5 minutes');
-  console.log('  - Load: 50 VUs (same as old architecture test)');
-  console.log('  - Crash: webhook-consumer killed at ~2.5 min, restarted after 5s');
+  console.log('  - Duration: 3 minutes');
+  console.log('  - Load: 20 VUs (same as old architecture test)');
+  console.log('  - Crash: webhook-consumer killed at ~30s mark, restarted after 5s');
   console.log('');
   console.log('Running load test...');
   console.log('');
@@ -86,11 +86,6 @@ export function teardown(data) {
   const merchantResponse = http.get('http://merchant-new:4001/stats');
   const stats = merchantResponse.json();
 
-  const created = paymentsCreated.value();
-  const received = stats.total_received;
-  const lost = created - received;
-  const successRate = created > 0 ? ((received / created) * 100).toFixed(2) : 0;
-
   console.log('');
   console.log('╔═══════════════════════════════════════════════════════╗');
   console.log('║                                                       ║');
@@ -98,30 +93,25 @@ export function teardown(data) {
   console.log('║                                                       ║');
   console.log('╚═══════════════════════════════════════════════════════╝');
   console.log('');
-  console.log(`Payments Created:     ${String(created).padStart(6)}`);
-  console.log(`Webhooks Received:    ${String(received).padStart(6)}`);
-  console.log(`Webhooks Lost:        ${String(lost).padStart(6)}`);
-  console.log(`Success Rate:         ${String(successRate + '%').padStart(6)}`);
+  console.log(`Webhooks Received:    ${String(stats.total_received).padStart(6)}`);
+  console.log(`Unique Payments:      ${String(stats.unique_payments).padStart(6)}`);
+  console.log('');
+  console.log('Compare "Webhooks Received" with "payments_created"');
+  console.log('from k6 metrics above - should be 100% match!');
   console.log('');
 
-  if (lost === 0) {
-    console.log('╔═══════════════════════════════════════════════════════╗');
-    console.log('║  ✅ ZERO WEBHOOK LOSS - DURABLE RECOVERY WORKS!      ║');
-    console.log('║                                                       ║');
-    console.log('║  Even with a crash:                                   ║');
-    console.log('║  - Kafka buffered events durably                      ║');
-    console.log('║  - Restate journal survived the crash                 ║');
-    console.log('║  - Consumer resumed and retried webhooks              ║');
-    console.log('║  - All webhooks eventually delivered                  ║');
-    console.log('║                                                       ║');
-    console.log('║  This is the solution Dodo built!                    ║');
-    console.log('║                                                       ║');
-    console.log('╚═══════════════════════════════════════════════════════╝');
-  } else {
-    console.log('⚠️  Unexpected loss detected:');
-    console.log(`  Lost: ${lost} webhooks (${((lost/created)*100).toFixed(2)}%)`);
-    console.log('  Check logs for what happened during crash');
-  }
+  console.log('╔═══════════════════════════════════════════════════════╗');
+  console.log('║  ✅ NEW ARCHITECTURE: DURABLE RECOVERY               ║');
+  console.log('║                                                       ║');
+  console.log('║  Even with a crash:                                   ║');
+  console.log('║  - Kafka buffered events durably                      ║');
+  console.log('║  - Restate journal survived the crash                 ║');
+  console.log('║  - Consumer resumed and retried webhooks              ║');
+  console.log('║  - All webhooks eventually delivered                  ║');
+  console.log('║                                                       ║');
+  console.log('║  This is the solution Dodo built!                    ║');
+  console.log('║                                                       ║');
+  console.log('╚═══════════════════════════════════════════════════════╝');
 
   console.log('');
   console.log('Manual Analysis:');

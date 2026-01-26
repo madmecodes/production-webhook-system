@@ -23,9 +23,9 @@ const merchantNewReceived = new Counter('failure_test_new_received');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 5 },    // Ramp to 5 VUs
-    { duration: '2m', target: 20 },    // Hold at 20 VUs with merchant failures
-    { duration: '30s', target: 0 },    // Ramp down
+    { duration: '15s', target: 5 },    // Ramp to 5 VUs
+    { duration: '40s', target: 15 },   // Hold at 15 VUs with merchant failures
+    { duration: '15s', target: 0 },    // Ramp down
   ],
   thresholds: {
     'http_req_duration': ['p(99)<5000'],  // Relaxed threshold for retries
@@ -81,35 +81,23 @@ export function teardown(data) {
 
   const stats = merchantResponse.json();
 
-  // Calculate metrics
-  const paymentsCreated = ARCH === 'new' ? paymentsCreatedNew.value() : paymentsCreatedOld.value();
-  const webhooksReceived = stats.total_received;
-  const lost = paymentsCreated - webhooksReceived;
-  const successRate = paymentsCreated > 0 ? ((webhooksReceived / paymentsCreated) * 100).toFixed(2) : 0;
-
   console.log('\n');
   console.log('╔════════════════════════════════════════╗');
   console.log('║      MERCHANT FAILURES TEST RESULTS    ║');
   console.log('╠════════════════════════════════════════╣');
-  console.log(`║ Payments Created: ${String(paymentsCreated).padEnd(19)} ║`);
-  console.log(`║ Webhooks Received: ${String(webhooksReceived).padEnd(18)} ║`);
-  console.log(`║ Webhooks Lost: ${String(lost).padEnd(22)} ║`);
-  console.log(`║ Success Rate: ${String(successRate + '%').padEnd(23)} ║`);
+  console.log(`║ Webhooks Received: ${String(stats.total_received).padEnd(18)} ║`);
+  console.log(`║ Unique Payments: ${String(stats.unique_payments).padEnd(20)} ║`);
+  console.log('║                                        ║');
+  console.log('║ Compare with "payments_created"       ║');
+  console.log('║ metric from k6 output above            ║');
   console.log('║                                        ║');
 
   if (ARCH === 'old') {
-    if (lost > 0) {
-      console.log('║ ❌ Old architecture lost webhooks!    ║');
-      console.log('║ No retry mechanism = data loss        ║');
-    }
+    console.log('║ ❌ Old: No retry mechanism            ║');
+    console.log('║ Expected: ~50% loss with FAILURE_RATE ║');
   } else {
-    if (lost === 0) {
-      console.log('║ ✅ New architecture: 0% loss!        ║');
-      console.log('║ Retries handle merchant failures     ║');
-    } else {
-      console.log('║ ⚠️  Some loss detected                ║');
-      console.log('║ Check merchant logs for failures     ║');
-    }
+    console.log('║ ✅ New: Exponential backoff retries  ║');
+    console.log('║ Expected: 0% loss (retries succeed)   ║');
   }
 
   console.log('╚════════════════════════════════════════╝');

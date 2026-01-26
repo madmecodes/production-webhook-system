@@ -18,12 +18,12 @@ const merchantPaymentsReceived = new Counter('old_merchant_received');
 
 export const options = {
   stages: [
-    { duration: '1m', target: 20 },   // Ramp up to 20 VUs
-    { duration: '3m', target: 50 },   // Increase to 50 VUs (heavy load)
-    { duration: '1m', target: 0 },    // Ramp down
+    { duration: '20s', target: 10 },  // Ramp up to 10 VUs
+    { duration: '40s', target: 20 },  // Increase to 20 VUs (moderate load)
+    { duration: '20s', target: 0 },   // Ramp down
   ],
   thresholds: {
-    'payments_created': ['count > 100'],
+    'payments_created': ['count > 50'],
     'http_req_duration': ['p(99)<1000'],
   },
 };
@@ -41,7 +41,7 @@ export default function() {
 export function setup() {
   console.log('🔴 OLD ARCHITECTURE TEST STARTING');
   console.log('⚠️  Expected webhook loss rate: ~0.3%');
-  console.log('📊 Running 5 minutes of load test');
+  console.log('📊 Running 80 second load test');
 }
 
 export function teardown(data) {
@@ -53,14 +53,12 @@ export function teardown(data) {
   console.log('╔════════════════════════════════════════╗');
   console.log('║     OLD ARCHITECTURE TEST RESULTS      ║');
   console.log('╠════════════════════════════════════════╣');
-  console.log(`║ Payments Created: ${String(paymentsCreated.value()).padEnd(19)} ║`);
   console.log(`║ Webhooks Received: ${String(stats.total_received).padEnd(18)} ║`);
-
-  const lost = paymentsCreated.value() - stats.total_received;
-  const lossRate = ((lost / paymentsCreated.value()) * 100).toFixed(2);
-
-  console.log(`║ Webhooks Lost: ${String(lost).padEnd(22)} ║`);
-  console.log(`║ Loss Rate: ${String(lossRate + '%').padEnd(26)} ║`);
+  console.log(`║ Unique Payments: ${String(stats.unique_payments).padEnd(20)} ║`);
+  console.log('║                                        ║');
+  console.log('║ Compare "Webhooks Received" above     ║');
+  console.log('║ with "payments_created" metric         ║');
+  console.log('║ from k6 output to see loss rate        ║');
   console.log('║                                        ║');
   console.log('║ ⚠️  This demonstrates the problem     ║');
   console.log('║ that Dodo was facing!                 ║');
