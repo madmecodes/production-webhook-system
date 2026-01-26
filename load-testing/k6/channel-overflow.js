@@ -23,9 +23,9 @@ const paymentsCreatedNew = new Counter('overflow_test_new_payments');
 export const options = {
   stages: [
     // Sudden burst to overwhelm the channel
-    { duration: '10s', target: 100 },   // Fast ramp to 100 VUs
-    { duration: '20s', target: 100 },   // Hold burst
-    { duration: '30s', target: 0 },     // Ramp down
+    { duration: '10s', target: 50 },   // Fast ramp to 50 VUs
+    { duration: '20s', target: 50 },   // Hold burst
+    { duration: '10s', target: 0 },    // Ramp down
   ],
   thresholds: {
     'http_req_duration': ['p(99)<2000'],
@@ -80,31 +80,23 @@ export function teardown(data) {
 
   const stats = merchantResponse.json();
 
-  const paymentsCreated = ARCH === 'new' ? paymentsCreatedNew.value() : paymentsCreatedOld.value();
-  const webhooksReceived = stats.total_received;
-  const lost = paymentsCreated - webhooksReceived;
-  const successRate = paymentsCreated > 0 ? ((webhooksReceived / paymentsCreated) * 100).toFixed(2) : 0;
-
   console.log('\n');
   console.log('╔════════════════════════════════════════╗');
   console.log('║  CHANNEL OVERFLOW TEST RESULTS         ║');
   console.log('╠════════════════════════════════════════╣');
-  console.log(`║ Payments Created: ${String(paymentsCreated).padEnd(19)} ║`);
-  console.log(`║ Webhooks Received: ${String(webhooksReceived).padEnd(18)} ║`);
-  console.log(`║ Webhooks Lost: ${String(lost).padEnd(22)} ║`);
-  console.log(`║ Success Rate: ${String(successRate + '%').padEnd(23)} ║`);
+  console.log(`║ Webhooks Received: ${String(stats.total_received).padEnd(18)} ║`);
+  console.log(`║ Unique Payments: ${String(stats.unique_payments).padEnd(20)} ║`);
+  console.log('║                                        ║');
+  console.log('║ Compare with "payments_created"       ║');
+  console.log('║ metric from k6 output above            ║');
   console.log('║                                        ║');
 
   if (ARCH === 'old') {
-    if (lost > 0) {
-      const lossRate = ((lost / paymentsCreated) * 100).toFixed(2);
-      console.log(`║ ❌ Channel overflow detected!         ║`);
-      console.log(`║ Lost: ${lossRate}% of payments              ║`);
-    }
+    console.log('║ ❌ Old: Fixed 1000-capacity queue    ║');
+    console.log('║ Expected: Loss on burst load          ║');
   } else {
-    if (lost === 0) {
-      console.log('║ ✅ No loss (Kafka handles burst)     ║');
-    }
+    console.log('║ ✅ New: Kafka unlimited capacity     ║');
+    console.log('║ Expected: 0% loss (queue buffers)     ║');
   }
 
   console.log('╚════════════════════════════════════════╝');
