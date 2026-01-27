@@ -31,6 +31,14 @@ struct DomainEvent {
     payload: serde_json::Value,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct SequinMessage {
+    record: DomainEvent,
+    metadata: serde_json::Value,
+    action: String,
+    changes: Option<serde_json::Value>,
+}
+
 #[derive(Clone, Debug)]
 struct ProcessedEvent {
     event_id: String,
@@ -81,8 +89,10 @@ async fn main() {
             }
             Ok(m) => {
                 if let Some(payload) = m.payload() {
-                    if let Ok(event) = serde_json::from_slice::<DomainEvent>(payload) {
-                        info!("Received event from Kafka: {:?}", event.event_type);
+                    match serde_json::from_slice::<SequinMessage>(payload) {
+                        Ok(sequin_msg) => {
+                            let event = sequin_msg.record;
+                            info!("Received event from Kafka: {:?}", event.event_type);
 
                         // DURABLE EXECUTION DEMO:
                         // 1. Generate stable event_id (first time only)
@@ -106,6 +116,11 @@ async fn main() {
                             Err(e) => {
                                 error!("Failed to process event: {}", e);
                             }
+                        }
+                        }
+                        Err(e) => {
+                            error!("Failed to deserialize Sequin message: {:?}", e);
+                            error!("Raw payload: {}", String::from_utf8_lossy(payload));
                         }
                     }
                 }
@@ -154,13 +169,18 @@ async fn handle_event(
 
     // Step 3: Send webhook with retries
     let merchant_webhook_id = format!("wh_{}", Uuid::new_v4());
+
+    // Generate a stable UUID for event_id (based on object_id)
+    let event_uuid = Uuid::parse_str(&event.object_id)
+        .unwrap_or_else(|_| Uuid::new_v4());
+
     let mut retries = 0;
     let max_retries = 3;
     let mut last_error;
 
     loop {
         let body = serde_json::json!({
-            "event_id": event_id,
+            "event_id": event_uuid,
             "event_type": event.event_type,
             "payment": payload
         });

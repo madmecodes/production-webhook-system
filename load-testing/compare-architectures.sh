@@ -102,14 +102,14 @@ run_crash_tests() {
     echo "Expected: Webhooks during crash window are LOST"
     echo ""
     cd "$SCRIPT_DIR"
-    bash chaos-old.sh
+    bash scripts/chaos-old.sh
     echo ""
 
     echo -e "${YELLOW}[2/2] Testing NEW ARCHITECTURE${NC}"
     echo "Expected: ZERO webhook loss (durable recovery)"
     echo ""
     cd "$SCRIPT_DIR"
-    bash chaos-new.sh
+    bash scripts/chaos-new.sh
     echo ""
 }
 

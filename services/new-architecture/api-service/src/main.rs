@@ -92,21 +92,15 @@ async fn create_payment(
     let payment_id = Uuid::new_v4();
     let merchant_id = Uuid::new_v4();
 
-    // ATOMIC OPERATION: Both UPDATE and INSERT in same transaction
-    // The PostgreSQL trigger fires automatically and creates the event
+    // ATOMIC OPERATION: INSERT payment, trigger creates event automatically
+    // The PostgreSQL trigger fires automatically and creates the domain event
     // If this transaction fails, BOTH payment and event are rolled back
     let result = sqlx::query(
         r#"
-        UPDATE payments
-        SET status = 'succeeded', updated_at = NOW()
-        WHERE id = $1;
-
         INSERT INTO payments (id, merchant_id, amount, currency, status)
-        SELECT $2, $3, $4, $5, $6
-        WHERE NOT EXISTS (SELECT 1 FROM payments WHERE id = $2);
+        VALUES ($1, $2, $3, $4, $5)
         "#,
     )
-    .bind(payment_id)
     .bind(payment_id)
     .bind(merchant_id)
     .bind(req.amount)
