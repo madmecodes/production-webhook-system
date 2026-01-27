@@ -190,15 +190,6 @@ services:
       RUST_LOG: info
     container_name: merchant-new
 
-  # === TESTING ===
-
-  k6:
-    image: grafana/k6:latest
-    volumes:
-      - ./load-testing/k6:/scripts
-      - ./results:/results
-    working_dir: /scripts
-
 volumes:
   postgres_data:
   restate_data:
