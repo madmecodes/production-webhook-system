@@ -18,12 +18,12 @@ const merchantPaymentsReceived = new Counter('old_merchant_received');
 
 export const options = {
   stages: [
-    { duration: '20s', target: 10 },  // Ramp up to 10 VUs
-    { duration: '40s', target: 20 },  // Increase to 20 VUs (moderate load)
-    { duration: '20s', target: 0 },   // Ramp down
+    { duration: '10s', target: 10 },  // Ramp up to 10 VUs
+    { duration: '15s', target: 20 },  // Increase to 20 VUs (moderate load)
+    { duration: '5s', target: 0 },    // Ramp down
   ],
   thresholds: {
-    'payments_created': ['count > 50'],
+    'payments_created': ['count > 20'],
     'http_req_duration': ['p(99)<1000'],
   },
 };

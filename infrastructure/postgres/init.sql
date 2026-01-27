@@ -38,8 +38,8 @@ CREATE PUBLICATION domain_events_pub FOR TABLE domain_events;
 CREATE OR REPLACE FUNCTION notify_payment_status_change()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Only insert event if status changed
-    IF OLD.status IS DISTINCT FROM NEW.status THEN
+    -- Insert event on INSERT or if status changed on UPDATE
+    IF (TG_OP = 'INSERT') OR (OLD.status IS DISTINCT FROM NEW.status) THEN
         INSERT INTO domain_events (event_type, object_id, merchant_id, payload)
         VALUES (
             'payment.' || LOWER(NEW.status),
@@ -60,7 +60,7 @@ $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS payment_status_change_trigger ON payments;
 CREATE TRIGGER payment_status_change_trigger
-AFTER UPDATE ON payments
+AFTER INSERT OR UPDATE ON payments
 FOR EACH ROW
 EXECUTE FUNCTION notify_payment_status_change();
 
