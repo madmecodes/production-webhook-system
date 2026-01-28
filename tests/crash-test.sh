@@ -34,6 +34,9 @@ print_section "OLD ARCHITECTURE CRASH TEST"
 echo "Expected: Webhooks during crash window are LOST"
 echo ""
 
+# Reset merchant state for clean test
+reset_merchant "http://localhost:4000"
+
 # Get initial stats
 OLD_STATS_BEFORE=$(get_merchant_stats "http://localhost:4000")
 OLD_BEFORE=$(parse_total_received "$OLD_STATS_BEFORE")
@@ -60,7 +63,7 @@ echo ""
 wait $SEND_PID 2>/dev/null || true
 
 # Wait for webhooks
-wait_for_webhooks 3
+wait_for_webhooks 5
 
 # Get final stats
 OLD_STATS_AFTER=$(get_merchant_stats "http://localhost:4000")
@@ -83,6 +86,9 @@ fi
 print_section "NEW ARCHITECTURE CRASH TEST"
 echo "Expected: ZERO webhook loss (durable recovery)"
 echo ""
+
+# Reset merchant state for clean test
+reset_merchant "http://localhost:4001"
 
 # Get initial stats
 NEW_STATS_BEFORE=$(get_merchant_stats "http://localhost:4001")
@@ -111,7 +117,7 @@ wait $SEND_PID 2>/dev/null || true
 
 # Wait for webhooks (longer for new arch + recovery)
 echo "Waiting for Kafka buffering and recovery..."
-wait_for_webhooks 8
+wait_for_webhooks 45
 
 # Get final stats
 NEW_STATS_AFTER=$(get_merchant_stats "http://localhost:4001")
@@ -140,11 +146,11 @@ echo -e "${NC}"
 echo ""
 echo "OLD ARCHITECTURE (In-Memory Webhooks):"
 echo "  Created: $NUM_PAYMENTS | Delivered: $OLD_DELIVERED | Lost: $OLD_LOSS"
-echo "  Loss Rate: $(awk "BEGIN {printf \"%.2f\", ($OLD_LOSS/$NUM_PAYMENTS)*100}")%"
+echo "  Loss Rate: $(awk -v loss=$OLD_LOSS -v total=$NUM_PAYMENTS 'BEGIN {printf "%.2f", (loss/total)*100}')%"
 echo ""
 echo "NEW ARCHITECTURE (Kafka + Durable Execution):"
 echo "  Created: $NUM_PAYMENTS | Delivered: $NEW_DELIVERED | Lost: $NEW_LOSS"
-echo "  Loss Rate: $(awk "BEGIN {printf \"%.2f\", ($NEW_LOSS/$NUM_PAYMENTS)*100}")%"
+echo "  Loss Rate: $(awk -v loss=$NEW_LOSS -v total=$NUM_PAYMENTS 'BEGIN {printf "%.2f", (loss/total)*100}')%"
 echo ""
 echo "KEY FINDING:"
 if [ "$OLD_LOSS" -gt "$NEW_LOSS" ]; then

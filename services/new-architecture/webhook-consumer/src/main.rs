@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use rdkafka::consumer::{Consumer, StreamConsumer};
+use rdkafka::consumer::{CommitMode, Consumer, StreamConsumer};
 use rdkafka::{ClientConfig, Message};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -72,6 +72,7 @@ async fn main() {
         .set("bootstrap.servers", &brokers)
         .set("group.id", "webhook-consumer-group")
         .set("auto.offset.reset", "earliest")
+        .set("enable.auto.commit", "false") // Manual commit for at-least-once delivery
         .create()
         .expect("Failed to create Kafka consumer");
 
@@ -112,15 +113,24 @@ async fn main() {
                         {
                             Ok(_) => {
                                 info!("Event processed successfully: {}", event_id);
+                                // Commit offset ONLY after successful processing (at-least-once delivery)
+                                if let Err(e) = consumer.commit_message(&m, CommitMode::Async) {
+                                    error!("Failed to commit offset: {:?}", e);
+                                }
                             }
                             Err(e) => {
-                                error!("Failed to process event: {}", e);
+                                error!("Failed to process event: {} - will retry on next poll", e);
+                                // Don't commit - message will be reprocessed
                             }
                         }
                         }
                         Err(e) => {
                             error!("Failed to deserialize Sequin message: {:?}", e);
                             error!("Raw payload: {}", String::from_utf8_lossy(payload));
+                            // Commit malformed messages to avoid infinite loop
+                            if let Err(commit_err) = consumer.commit_message(&m, CommitMode::Async) {
+                                error!("Failed to commit offset for malformed message: {:?}", commit_err);
+                            }
                         }
                     }
                 }

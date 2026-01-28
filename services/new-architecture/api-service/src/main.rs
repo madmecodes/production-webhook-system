@@ -36,6 +36,7 @@ struct Payment {
 
 #[derive(Serialize, Deserialize)]
 struct CreatePaymentRequest {
+    merchant_id: Option<String>,
     amount: i64,
     currency: String,
 }
@@ -56,7 +57,7 @@ async fn main() {
         .expect("DATABASE_URL must be set");
 
     let pool = PgPoolOptions::new()
-        .max_connections(5)
+        .max_connections(50) // Increased for load testing
         .connect(&database_url)
         .await
         .expect("Failed to connect to database");
@@ -90,7 +91,20 @@ async fn create_payment(
     Json(req): Json<CreatePaymentRequest>,
 ) -> Result<(StatusCode, Json<PaymentResponse>), (StatusCode, String)> {
     let payment_id = Uuid::new_v4();
-    let merchant_id = Uuid::new_v4();
+
+    // Use provided merchant_id:
+    // - If it's a valid UUID, use it directly
+    // - If it's a string, convert to deterministic UUID (for testing)
+    // - Otherwise generate a new random UUID
+    let merchant_id = match &req.merchant_id {
+        Some(id) => {
+            Uuid::parse_str(id).unwrap_or_else(|_| {
+                // Convert string to deterministic UUID using v5 (name-based)
+                Uuid::new_v5(&Uuid::NAMESPACE_DNS, id.as_bytes())
+            })
+        }
+        None => Uuid::new_v4(),
+    };
 
     // ATOMIC OPERATION: INSERT payment, trigger creates event automatically
     // The PostgreSQL trigger fires automatically and creates the domain event
