@@ -48,6 +48,14 @@ get_merchant_stats() {
     curl -s "$merchant_url/stats"
 }
 
+# Reset merchant webhook state
+# Usage: reset_merchant <merchant-url>
+reset_merchant() {
+    local merchant_url=$1
+    curl -s -X POST "$merchant_url/reset" -o /dev/null
+    echo "✓ Reset merchant state: $merchant_url"
+}
+
 # Parse total received from stats JSON
 # Usage: parse_total_received <stats-json>
 parse_total_received() {
@@ -118,8 +126,12 @@ print_results() {
 # Usage: wait_for_webhooks <seconds>
 wait_for_webhooks() {
     local seconds=${1:-3}
-    echo "Waiting ${seconds}s for webhook processing..."
-    sleep "$seconds"
+    echo -n "Waiting ${seconds}s for webhook processing"
+    for i in $(seq 1 $seconds); do
+        echo -n "."
+        sleep 1
+    done
+    echo " done"
 }
 
 # Check if Docker services are running

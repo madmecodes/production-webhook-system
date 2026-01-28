@@ -17,6 +17,9 @@ print_test_header "Baseline (Normal Operation)"
 
 print_section "OLD ARCHITECTURE"
 
+# Reset merchant state for clean test
+reset_merchant "http://localhost:4000"
+
 # Get initial stats
 OLD_STATS_BEFORE=$(get_merchant_stats "http://localhost:4000")
 OLD_BEFORE=$(parse_total_received "$OLD_STATS_BEFORE")
@@ -46,6 +49,9 @@ print_results "OLD ARCHITECTURE" "$NUM_PAYMENTS" "$OLD_DELIVERED" "0%"
 
 
 print_section "NEW ARCHITECTURE"
+
+# Reset merchant state for clean test
+reset_merchant "http://localhost:4001"
 
 # Get initial stats
 NEW_STATS_BEFORE=$(get_merchant_stats "http://localhost:4001")

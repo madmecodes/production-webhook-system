@@ -56,6 +56,7 @@ async fn main() {
         .route("/health", get(health_check))
         .route("/webhooks", post(receive_webhook))
         .route("/stats", get(get_stats))
+        .route("/reset", post(reset_webhooks))
         .with_state(state);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "4000".to_string());
@@ -122,4 +123,10 @@ async fn get_stats(State(state): State<AppState>) -> Json<StatsResponse> {
         unique_payments: unique_payments.len(),
         webhooks,
     })
+}
+
+async fn reset_webhooks(State(state): State<AppState>) -> (StatusCode, String) {
+    state.received_webhooks.write().clear();
+    info!("Webhook state reset - all webhooks cleared");
+    (StatusCode::OK, "Webhooks reset".to_string())
 }
