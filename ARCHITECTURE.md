@@ -87,6 +87,195 @@ PostgreSQL → Sequin → Kafka → Restate → Data Service → webhook-consume
                                     └─────────────────┘
 ```
 
+## Real-World Example: How It Works End-to-End
+
+Let's walk through a concrete example to see how the architecture works in practice.
+
+### Scenario: Joe's T-Shirt Shop
+
+Joe runs an online t-shirt store and uses a payment processor (like our demo) to handle payments. Let's follow what happens when a customer buys a $50 t-shirt:
+
+### Step 1: Customer Makes Purchase
+```
+Customer                     Joe's Website              Payment API (new-api)
+   │                              │                           │
+   │─── clicks "Buy Now" ────────►│                           │
+   │                              │                           │
+   │                              │─── POST /payments ───────►│
+   │                              │    {amount: 5000,         │
+   │                              │     currency: "USD"}      │
+   │                              │                           │
+   │                              │                           │◄── Charge card
+   │                              │                           │
+   │                              │◄────── 200 OK ────────────│
+   │◄── "Payment successful!" ────│                           │
+```
+
+**What happens:**
+- Customer's card is charged
+- `new-api` saves payment to PostgreSQL with `status='succeeded'`
+- Transaction commits atomically
+
+### Step 2: Event Captured Automatically
+```
+PostgreSQL                                 domain_events table
+    │                                            │
+    │── UPDATE payments ─────►  TRIGGER ───────►│ INSERT domain_event
+    │   SET status='succeeded'  (automatic)     │ {
+    │                                            │   event_type: "payment.succeeded",
+    │                                            │   object_id: "pay_12345",
+    │                                            │   merchant_id: "joe_tshirts"
+    │                                            │ }
+    │                                            │
+    └─────────────── COMMIT (atomic) ───────────┘
+         Both succeed together or both fail
+```
+
+**What happens:**
+- PostgreSQL trigger automatically creates domain event
+- Event and payment update commit in same transaction
+- Zero chance of payment succeeding without event being created
+
+### Step 3: Event Streamed Through Pipeline
+```
+PostgreSQL WAL     Sequin           Kafka              Restate
+    │                │                │                   │
+    │─── writes ────►│                │                   │
+    │   event to     │                │                   │
+    │   WAL          │                │                   │
+    │                │                │                   │
+    │                │─── publish ───►│                   │
+    │                │   (<50ms)      │                   │
+    │                │                │                   │
+    │                │                │─── subscribe ────►│
+    │                │                │   (~5ms)          │
+    │                │                │                   │
+    │                │                │                   │◄── journals
+    │                │                │                   │    invocation
+```
+
+**What happens:**
+- Sequin reads event from WAL in real-time (~50ms latency)
+- Publishes to Kafka topic `webhook-events`
+- Restate consumes from Kafka
+- Restate **journals** the invocation (critical for durability!)
+
+### Step 4: Webhook Delivery
+```
+Restate           Data Service      webhook-consumer     Joe's Server
+   │                   │                    │               (merchant)
+   │                   │                    │                   │
+   │─── call ─────────►│                    │                   │
+   │   "get payment    │                    │                   │
+   │    pay_12345"     │                    │                   │
+   │                   │                    │                   │
+   │◄── return ────────│                    │                   │
+   │   {amount: 5000,  │                    │                   │
+   │    status: ...}   │                    │                   │
+   │                   │                    │                   │
+   │─── call ──────────┴───────────────────►│                   │
+   │   "deliver webhook"                    │                   │
+   │                                        │                   │
+   │                                        │─── POST ─────────►│
+   │                                        │   /webhooks       │
+   │                                        │   {               │
+   │                                        │     event_id: "evt_...",
+   │                                        │     type: "payment.succeeded",
+   │                                        │     data: {...}   │
+   │                                        │   }               │
+   │                                        │                   │
+   │                                        │◄──── 200 OK ──────│
+   │◄─────────────────────────────────────┘                   │
+```
+
+**What happens:**
+- Restate calls data-service to get fresh payment data
+- Restate calls webhook-consumer to deliver
+- webhook-consumer makes HTTPS POST to `https://joestshirts.com/webhooks`
+- Joe's server receives notification that payment succeeded
+
+**Note:** In production Dodo Payments, this step uses **Svix** instead of webhook-consumer. Svix handles the HTTP delivery, retries, and provides a webhook dashboard for merchants. Our demo shows you can achieve the same reliability without Svix by using Restate's durable execution.
+
+### Step 5: Merchant Takes Action
+```
+Joe's Server (receives webhook)
+   │
+   │── Verify webhook signature (optional in our demo)
+   │
+   │── Parse payload: payment_id = "pay_12345", status = "succeeded"
+   │
+   ├──► Update database: Mark order #7890 as "paid"
+   │
+   ├──► Send confirmation email to customer
+   │
+   ├──► Trigger fulfillment: Print t-shirt, ship to customer
+   │
+   └──► Return HTTP 200 OK (acknowledges webhook received)
+```
+
+**What happens:**
+- Joe's backend marks the order as paid
+- Sends confirmation email: "Your payment was successful!"
+- Starts fulfillment process (print and ship t-shirt)
+- Returns 200 OK to acknowledge webhook
+
+### Complete Timeline
+
+```
+Time    Component              Action
+──────  ──────────────────────────────────────────────────────────
+0ms     Customer              Clicks "Buy Now"
+10ms    new-api               Saves payment to PostgreSQL
+10ms    PostgreSQL Trigger    Creates domain_event (atomic)
+60ms    Sequin                Reads event from WAL, publishes to Kafka
+65ms    Kafka                 Routes message to Restate subscription
+70ms    Restate               Journals invocation, calls data-service
+150ms   Data Service          Fetches payment payload
+200ms   webhook-consumer      Makes HTTPS POST to Joe's server
+350ms   Joe's Server          Receives webhook, marks order paid
+360ms   Joe's Server          Returns 200 OK
+──────  ──────────────────────────────────────────────────────────
+Total:  ~360ms from payment to webhook delivered
+```
+
+### What If webhook-consumer Crashes?
+
+This is where Restate's magic happens:
+
+```
+Scenario: webhook-consumer crashes during Step 4
+
+Time    Event
+──────  ───────────────────────────────────────────────────────────
+200ms   webhook-consumer starts HTTP POST to Joe's server
+250ms   🔥 webhook-consumer CRASHES (pod killed, OOM, etc.)
+
+        Traditional approach: Webhook lost forever ❌
+
+        Our approach with Restate:
+250ms   Restate detects webhook-consumer is down
+        Restate's journal still contains:
+        - Event data
+        - Generated idempotency key
+        - "Pending: HTTP call to Joe's server"
+
+260ms   Kubernetes restarts webhook-consumer
+
+270ms   Restate REPLAYS from journal:
+        - Uses SAME idempotency key (not new!)
+        - Resumes from "Pending: HTTP call"
+
+280ms   webhook-consumer makes HTTP POST (retry)
+
+430ms   Joe's server receives webhook ✅
+──────  ───────────────────────────────────────────────────────────
+Result: Webhook delivered successfully, zero data loss
+```
+
+**Key point:** The journal ensures the webhook will be delivered even if the process crashes. The idempotency key is stable across crashes, so if Joe's server already processed it, the duplicate is safely ignored.
+
+This is exactly what our crash test demonstrates: 100 payments, webhook-consumer killed mid-processing, 100 webhooks delivered after recovery.
+
 ## Component Breakdown
 
 ### 1. PostgreSQL + Triggers
