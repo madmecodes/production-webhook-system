@@ -4,10 +4,10 @@
 set -e
 
 RESTATE_ADMIN="http://localhost:9070"
-WEBHOOK_CONSUMER_URL="http://webhook-consumer:9080"
+SVIX_CALLER_URL="http://svix-caller:9080"
 KAFKA_CLUSTER="local"
 KAFKA_TOPIC="webhook-events"
-HANDLER_SERVICE="WebhookProcessor"
+HANDLER_SERVICE="SvixCaller"
 HANDLER_METHOD="process"
 
 echo "Restate Handler Registration"
@@ -30,21 +30,21 @@ if [ $retry -eq $max_retries ]; then
         exit 1
 fi
 
-# Check if webhook-consumer container is running
+# Check if svix-caller container is running
 echo ""
 
-if docker ps --filter "name=webhook-consumer" --filter "status=running" --format "{{.Names}}" | grep -q webhook-consumer; then
+if docker ps --filter "name=svix-caller" --filter "status=running" --format "{{.Names}}" | grep -q svix-caller; then
     else
-        echo "Please start it with: docker compose up -d webhook-consumer"
+        echo "Please start it with: docker compose up -d svix-caller"
     exit 1
 fi
 
-# Register the webhook-consumer service with Restate
+# Register the svix-caller service with Restate
 echo ""
 
 REGISTER_RESPONSE=$(curl --http1.1 -s -X POST "$RESTATE_ADMIN/deployments" \
     -H "Content-Type: application/json" \
-    -d "{\"uri\": \"$WEBHOOK_CONSUMER_URL\"}")
+    -d "{\"uri\": \"$SVIX_CALLER_URL\"}")
 
 echo "Response: $REGISTER_RESPONSE"
 
@@ -78,7 +78,7 @@ if echo "$SUBSCRIPTION_RESPONSE" | grep -q 'kafka://'; then
 echo ""
 
 SERVICES=$(curl --http1.1 -s "$RESTATE_ADMIN/services")
-if echo "$SERVICES" | grep -q 'WebhookProcessor'; then
+if echo "$SERVICES" | grep -q 'SvixCaller'; then
     else
     fi
 

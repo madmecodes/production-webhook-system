@@ -165,17 +165,19 @@ services:
         condition: service_healthy
     container_name: data-service
 
-  webhook-consumer:
+  svix-caller:
     build:
-      context: ./services/new-architecture/webhook-consumer
+      context: ./services/new-architecture/svix-caller
       dockerfile: Dockerfile
     ports:
       - "9080:9080"  # HTTP endpoint for Restate ingress
     environment:
       PORT: 9080
       DATA_SERVICE_URL: http://data-service:3002
-      MERCHANT_URL: http://merchant-new:4001/webhooks
+      SVIX_AUTH_TOKEN: ${SVIX_AUTH_TOKEN}
       RUST_LOG: info
+    env_file:
+      - .env
     depends_on:
       kafka:
         condition: service_healthy
@@ -183,9 +185,7 @@ services:
         condition: service_started
       data-service:
         condition: service_started
-      merchant-new:
-        condition: service_started
-    container_name: webhook-consumer
+    container_name: svix-caller
 
   merchant-new:
     build:
