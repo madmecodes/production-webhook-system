@@ -117,14 +117,20 @@ services:
     container_name: sequin
 
   restate:
-    image: docker.io/restatedev/restate:1.0.0
+    image: docker.io/restatedev/restate:1.5
     ports:
       - "8080:8080"  # Admin API
       - "9070:9070"  # Ingress
+      - "9090:9090"  # Metrics
     environment:
       RUST_LOG: info
     volumes:
       - restate_data:/restate-data
+      - ./infrastructure/restate/restate.toml:/etc/restate/restate.toml
+    command: ["--config-file", "/etc/restate/restate.toml"]
+    depends_on:
+      kafka:
+        condition: service_healthy
     container_name: restate
 
   # === NEW ARCHITECTURE SERVICES ===
@@ -163,9 +169,10 @@ services:
     build:
       context: ./services/new-architecture/webhook-consumer
       dockerfile: Dockerfile
+    ports:
+      - "9080:9080"  # HTTP endpoint for Restate ingress
     environment:
-      KAFKA_BROKERS: kafka:9092
-      RESTATE_URL: http://restate:9070
+      PORT: 9080
       DATA_SERVICE_URL: http://data-service:3002
       MERCHANT_URL: http://merchant-new:4001/webhooks
       RUST_LOG: info
@@ -173,6 +180,8 @@ services:
       kafka:
         condition: service_healthy
       restate:
+        condition: service_started
+      data-service:
         condition: service_started
       merchant-new:
         condition: service_started

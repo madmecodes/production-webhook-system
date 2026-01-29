@@ -58,7 +58,33 @@ Keep other settings as default (Insert/Update/Delete enabled, Batch size 200)
 
 Click "Create Sink"
 
-## Step 4: Fix Replica Identity Warning
+## Step 4: Create Transform Function
+
+After creating the sink, you need to add a transform to extract just the database record from Sequin's metadata wrapper.
+
+1. In the Sink overview page, scroll to the **Transforms** section
+2. Click **"+ Create new function"**
+3. Fill in the function details:
+   - **Function name**: `extract_record`
+   - **Function type**: Transform function (should be pre-selected)
+   - **Description**: Extracts database record from Sequin wrapper
+
+4. Replace the code with:
+   ```elixir
+   def transform(action, record, changes, metadata) do
+     record
+   end
+   ```
+
+5. Click **"Create Function"**
+6. Go back to the Sink (click back arrow or "Sinks" in left menu)
+7. Click **"Edit"** on your Kafka sink
+8. In the **Transforms** section, select `extract_record` from the dropdown
+9. Click **"Save"** to apply the transform
+
+This transform extracts just the `record` field (the actual database row) and removes Sequin's metadata wrapper, so Restate receives the event in the correct format.
+
+## Step 5: Fix Replica Identity Warning
 
 Run this SQL command:
 
@@ -69,7 +95,7 @@ docker compose exec postgres psql -U dodo -d dodo_demo -c \
 
 Go back to Sequin UI and click "Refresh" in the blue notice box.
 
-## Step 5: Test Pipeline
+## Step 6: Test Pipeline
 
 Create a test payment:
 
