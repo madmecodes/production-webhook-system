@@ -92,15 +92,36 @@ impl SvixCaller for SvixCallerImpl {
             ..MessageIn::default()
         };
 
-        svix.message()
+        match svix.message()
             .create(event.merchant_id.clone(), message_in, None)
             .await
-            .map_err(|e| format!("Svix API error: {}", e))?;
+        {
+            Ok(_) => {
+                tracing::info!("Message sent to Svix successfully: {}", event_uuid);
+                tracing::info!("Svix will handle delivery to merchant's endpoints");
+                Ok(format!("sent_to_svix:{}", event_uuid))
+            }
+            Err(e) => {
+                let error_msg = format!("{}", e);
 
-        tracing::info!("Message sent to Svix successfully: {}", event_uuid);
-        tracing::info!("Svix will handle delivery to merchant's endpoints");
-
-        Ok(format!("sent_to_svix:{}", event_uuid))
+                // Check if error is 404 Application not found
+                if error_msg.contains("404") && error_msg.contains("not_found") {
+                    tracing::warn!(
+                        "Svix application not found for merchant_id: {}. Skipping event. \
+                        Create application via: curl -X POST https://api.eu.svix.com/api/v1/app \
+                        -H 'Authorization: Bearer YOUR_TOKEN' \
+                        -d '{{\"name\": \"Merchant Name\", \"uid\": \"{}\"}}' ",
+                        event.merchant_id,
+                        event.merchant_id
+                    );
+                    // Return success to prevent Restate from retrying
+                    Ok(format!("skipped_no_app:{}", event_uuid))
+                } else {
+                    // Other errors are retryable
+                    Err(format!("Svix API error: {}", e).into())
+                }
+            }
+        }
     }
 }
 

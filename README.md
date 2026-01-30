@@ -2,15 +2,10 @@
 
 This is a webhook replication of the Dodo Payments production architecture. Read the full blog post here: [Building Reliable Webhooks at Scale](https://dodo.dev/blog/reliable-webhooks)
 
-Production-grade webhook delivery system demonstrating how payment processors like Stripe and Dodo Payments build reliable webhook infrastructure at scale.
+Production-grade webhook delivery system replicating Dodo Payments' reliable webhook infrastructure at scale.
 
-## Quick Start
+#### Quick Start **Local setup:** See [LOCAL_SETUP.md](./LOCAL_SETUP.md)
 
-**For local setup and running the demo:** See [LOCAL_SETUP.md](./LOCAL_SETUP.md)
-
-**For Svix Cloud integration:** See [SVIX_SETUP.md](./SVIX_SETUP.md)
-
-**For in-house webhook architecture (without Svix):** Checkout branch `inhouse-webhook-no-svix`
 
 ## The Problem
 
@@ -20,8 +15,6 @@ This demo shows how to build webhooks that never lose events, even during servic
 
 ## Architecture Overview
 
-### With Svix Cloud (This Branch)
-
 ```
 Payment Created → PostgreSQL → Sequin (CDC) → Kafka → Restate → Svix Cloud → Merchant
      ↓              (WAL)         (Stream)    (Queue)  (Durable)  (Delivery)   (Joe's Shop)
@@ -29,20 +22,11 @@ Payment Created → PostgreSQL → Sequin (CDC) → Kafka → Restate → Svix C
    Writes         Changes       Transport   Preserved Guaranteed  Signing      Webhook
 ```
 
-### In-House Webhooks (Branch: `inhouse-webhook-no-svix`)
-
-```
-Payment Created → PostgreSQL → Sequin (CDC) → Kafka → Restate → webhook-consumer → Merchant
-     ↓              (WAL)         (Stream)    (Queue)  (Durable)    (HTTP POST)    (Joe's Shop)
-   Atomic         Capture       Reliable    Ordering  Execution    Direct Delivery  Receives
-   Writes         Changes       Transport   Preserved Guaranteed   (No signing)     Webhook
-```
-
 ## Real-World Example: Joe's T-Shirt Shop
 
 ### The Setup
 
-- **Dodo Payments**: Payment processor (like Stripe)
+- **Dodo Payments**: Payment processor
 - **Joe's T-Shirt Shop**: Merchant using Dodo to accept payments
 - **Customer**: Buys a t-shirt for $25
 
@@ -90,7 +74,7 @@ async fn process(event: DomainEvent) -> Result<String> {
     // 1. Fetch enriched payload from data-service
     let payment = fetch_payment_details(event.object_id);
 
-    // 2. Send to Svix Cloud (or direct HTTP in in-house branch)
+    // 2. Send to Svix Cloud
     svix.message().create(
         event.merchant_id,  // "joes-tshirt-shop"
         MessageIn {
@@ -104,9 +88,9 @@ async fn process(event: DomainEvent) -> Result<String> {
 **Why Restate?** If the service crashes mid-execution, Restate automatically retries from the last successful step. It's like a database transaction for your entire workflow.
 
 **Crash recovery example:**
-- ✅ Crashes after fetching payload but before Svix API call → Restate retries just the Svix call
-- ✅ Crashes after Svix API call succeeds → Restate marks complete, moves to next event
-- ✅ Network timeout → Restate retries with exponential backoff
+- Crashes after fetching payload but before Svix API call → Restate retries just the Svix call
+- Crashes after Svix API call succeeds → Restate marks complete, moves to next event
+- Network timeout → Restate retries with exponential backoff
 
 #### 5. Svix Cloud (Webhook Delivery)
 
@@ -152,54 +136,37 @@ app.post('/webhooks', (req, res) => {
 
 ## Key Components
 
-| Component | Role | Production Use |
-|-----------|------|----------------|
-| **PostgreSQL + Triggers** | Atomic event capture | Stripe, Shopify, GitHub |
-| **Sequin (CDC)** | Reliable event extraction | Debezium (Uber, Netflix), Maxwell (Shopify) |
-| **Kafka** | Durable event streaming | LinkedIn, Uber, Airbnb |
-| **Restate** | Durable workflow execution | Temporal (Netflix, Snap), Inngest |
-| **Svix** | Webhook delivery platform | Clerk, Pipedream, 1000+ companies |
+| Component | Role |
+|-----------|------|
+| **PostgreSQL + Triggers** | Atomic event capture |
+| **Sequin (CDC)** | Reliable event extraction |
+| **Kafka** | Durable event streaming |
+| **Restate** | Durable workflow execution |
+| **Svix** | Webhook delivery platform |
 
 ## Reliability Guarantees
 
 | Failure Scenario | How It's Handled |
 |-----------------|------------------|
-| API crashes after payment | ✅ Trigger ensures event is written atomically |
-| Sequin crashes | ✅ Resumes from last WAL position |
-| Kafka broker fails | ✅ Replication keeps events safe |
-| Restate crashes mid-processing | ✅ Resumes from last journal entry |
-| Svix API timeout | ✅ Restate retries with backoff |
-| Merchant endpoint down | ✅ Svix retries for 3 days |
+| API crashes after payment | Trigger ensures event is written atomically |
+| Sequin crashes | Resumes from last WAL position |
+| Kafka broker fails | Replication keeps events safe |
+| Restate crashes mid-processing | Resumes from last journal entry |
+| Svix API timeout | Restate retries with backoff |
+| Merchant endpoint down | Svix retries for 3 days |
 
 ## Architecture Comparison
 
-### When to Use Svix (This Branch)
+### Svix for Webhook Delivery
 
-**Best for:**
-- B2B SaaS with multiple customers
-- Need customer-facing webhook dashboard
-- Want to focus on core product, not webhook infrastructure
-- Need enterprise features (rate limiting, custom retry policies)
+**Why Svix?**
+- Automatic webhook signing (HMAC-SHA256)
+- Delivery monitoring & alerts
+- Customer self-service portal
+- Advanced features (transformations, filtering, rate limiting)
+- Reliable retries for 3 days with exponential backoff
 
-**Benefits:**
-- ✅ Automatic webhook signing
-- ✅ Delivery monitoring & alerts
-- ✅ Customer self-service portal
-- ✅ Advanced features (transformations, filtering)
-
-### When to Build In-House (Branch: `inhouse-webhook-no-svix`)
-
-**Best for:**
-- Single customer or internal webhooks
-- Extremely high volume (millions per second)
-- Custom delivery requirements (WebSockets, gRPC)
-- Full control over delivery logic
-
-**Trade-offs:**
-- ❌ You handle HTTP delivery logic
-- ❌ You implement webhook signing
-- ❌ You build monitoring dashboard
-- ❌ You maintain customer-facing tools
+Focus on your core product while Svix handles webhook delivery infrastructure.
 
 ## Architecture Principles
 
@@ -219,11 +186,11 @@ $$ LANGUAGE plpgsql;
 ### 2. Change Data Capture
 
 ```
-❌ Traditional Polling: SELECT * FROM events WHERE created_at > last_poll
+AVOID - Traditional Polling: SELECT * FROM events WHERE created_at > last_poll
   - Misses events during high load
   - Adds load to database
 
-✅ CDC (Sequin): Read from PostgreSQL WAL
+BETTER - CDC (Sequin): Read from PostgreSQL WAL
   - Zero impact on database performance
   - Captures every change
   - Exactly-once delivery
@@ -232,13 +199,13 @@ $$ LANGUAGE plpgsql;
 ### 3. Durable Execution
 
 ```rust
-// ❌ Without Restate: Crash = restart from beginning
+// WITHOUT Restate: Crash = restart from beginning
 async fn deliver_webhook(event) {
   let payload = fetch_payload(event.id);
   send_to_svix(payload);
 }
 
-// ✅ With Restate: Crash = resume from last step
+// WITH Restate: Crash = resume from last step
 #[restate_sdk::service]
 async fn deliver_webhook(ctx, event) {
   let payload = ctx.run(|| fetch_payload(event.id)).await;  // Cached
@@ -259,44 +226,34 @@ Restate:          Durable workflow execution
 Svix:             Webhook delivery infrastructure
 ```
 
-## Real-World Examples
+## Real-World Example: Dodo Payments
 
-### Stripe
-- Events captured atomically in database
-- Kafka for event streaming
-- Internal durable execution system
-- **In-house webhook delivery** (no Svix)
-
-### Dodo Payments
+This demo replicates the Dodo Payments production architecture:
 - PostgreSQL + triggers for atomicity
-- Sequin for CDC
-- Kafka for streaming
+- Sequin for CDC (Change Data Capture)
+- Kafka for event streaming
 - Restate for durable execution
 - **Svix for webhook delivery** ← This exact architecture
 
-### Shopify
-- MySQL with triggers
-- Maxwell for CDC (similar to Sequin)
-- Kafka for streaming
-- **In-house delivery system** with custom retry logic
+These principles are battle-tested in production at Dodo Payments.
 
 ## Common Pitfalls Avoided
 
-### ❌ Event Creation in Application Code
+### AVOID: Event Creation in Application Code
 ```javascript
 // Race condition - crash between writes = lost event
 await db.payments.create(payment);
 await db.events.create(event);
 ```
 
-### ✅ Event Creation in Database Trigger
+### BETTER: Event Creation in Database Trigger
 ```sql
 -- Atomic - both succeed or both fail
 CREATE TRIGGER payment_created AFTER INSERT ON payments
 FOR EACH ROW EXECUTE FUNCTION notify_payment_created();
 ```
 
-### ❌ Direct HTTP Calls Without Durability
+### AVOID: Direct HTTP Calls Without Durability
 ```javascript
 // Crash = lost event
 app.post('/payments', async (req, res) => {
@@ -305,7 +262,7 @@ app.post('/payments', async (req, res) => {
 });
 ```
 
-### ✅ Async Processing with Durability
+### BETTER: Async Processing with Durability
 ```javascript
 // Event persisted, delivery guaranteed
 app.post('/payments', async (req, res) => {
@@ -333,3 +290,5 @@ Read the full story: [Building Reliable Webhooks: How Dodo Payments Delivers 100
 ---
 
 **Built to demonstrate production-grade webhook architecture using battle-tested open source tools.**
+
+**Interested in building your own webhook system instead of using Svix?** Checkout branch [`inhouse-webhook-no-svix`](https://github.com/your-repo/tree/inhouse-webhook-no-svix) for an in-house webhook implementation.

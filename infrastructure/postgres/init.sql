@@ -73,5 +73,5 @@ GRANT ALL ON SEQUENCE domain_events_id_seq TO dodo;
 -- INITIAL DATA
 
 INSERT INTO payments (merchant_id, amount, currency, status)
-VALUES (gen_random_uuid(), 1000, 'USD', 'pending')
+VALUES ('bc1852a0-6e4d-5399-a35a-391ceaf44f80'::UUID, 1000, 'USD', 'pending')
 ON CONFLICT DO NOTHING;

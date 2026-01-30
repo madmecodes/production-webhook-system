@@ -95,11 +95,11 @@ echo "Sending $NUM_PAYMENTS payments with mid-test crash..."
 ) &
 SEND_PID=$!
 
-# Kill webhook-consumer at ~50% completion
+# Kill svix-caller at ~50% completion
 sleep 2.5
 echo ""
-echo "[CHAOS] Killing webhook-consumer container..."
-kill_and_restart_service "webhook-consumer" "$CRASH_DELAY"
+echo "[CHAOS] Killing svix-caller container..."
+kill_and_restart_service "svix-caller" "$CRASH_DELAY"
 echo ""
 
 # Wait for payment sending to complete

@@ -119,7 +119,7 @@ Should show `total_received: 1`
 
 ## Done!
 
-Sequin is now streaming PostgreSQL domain_events → Kafka → webhook-consumer pipeline is ready.
+Sequin is now streaming PostgreSQL domain_events → Kafka → Restate → Svix pipeline is ready.
 
 You can now run tests:
 ```bash
