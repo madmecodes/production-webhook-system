@@ -17,9 +17,14 @@ source "$SCRIPT_DIR/lib/helpers.sh"
 NUM_PAYMENTS=100
 CRASH_DELAY=3  # Seconds to keep service down
 
+# Use a pre-registered merchant ID with Svix
+# Change this to your actual registered merchant ID
+MERCHANT_ID="bc1852a0-6e4d-5399-a35a-391ceaf44f80"
+
 print_test_header "Process Crash During Webhook Delivery"
 echo "Blog Scenario: 'Timeline of a Lost Webhook'"
 echo "Service crashes during in-flight webhook request"
+echo "Using pre-registered Merchant ID: $MERCHANT_ID"
 echo ""
 
 
@@ -39,7 +44,7 @@ echo "Sending $NUM_PAYMENTS payments with mid-test crash..."
 # Start sending payments in background
 (
     for i in $(seq 1 $NUM_PAYMENTS); do
-        create_payment "http://localhost:3000" "crash-old-$i" >/dev/null 2>&1 || true
+        create_payment "http://localhost:3000" "$MERCHANT_ID" >/dev/null 2>&1 || true
         sleep 0.05  # Small delay between requests
     done
 ) &
@@ -89,7 +94,7 @@ echo "Sending $NUM_PAYMENTS payments with mid-test crash..."
 # Start sending payments in background
 (
     for i in $(seq 1 $NUM_PAYMENTS); do
-        create_payment "http://localhost:3001" "crash-new-$i" >/dev/null 2>&1 || true
+        create_payment "http://localhost:3001" "$MERCHANT_ID" >/dev/null 2>&1 || true
         sleep 0.05  # Small delay between requests
     done
 ) &
