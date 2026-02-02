@@ -3,6 +3,11 @@
 <img width="911" height="765" alt="Screenshot 2026-02-02 at 2 27 04 PM" src="https://github.com/user-attachments/assets/8d0b1dd7-393d-471f-b131-f3f52224fd6d" />
 
 
+**Youtube Video Explaination**
+
+[<img width="500" height="500" alt="Dodo System D (2)" src="https://github.com/user-attachments/assets/4092c070-264f-46a4-932d-6abd01a4972d" />](https://youtu.be/B6PWwIwXnmA)
+
+
 This is a webhook replication of the Dodo Payments production architecture. Read the full blog post here: [Building Reliable Webhooks at Scale](https://dodo.dev/blog/reliable-webhooks)
 
 Production-grade webhook delivery system replicating Dodo Payments' reliable webhook infrastructure at scale.
